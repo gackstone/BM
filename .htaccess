@@ -5,6 +5,11 @@ RewriteEngine On
 RewriteCond %{HTTP:Authorization} ^(.+)$
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+# Route API endpoints cleanly
+RewriteRule ^api/webhooks/didit/?$ api/webhooks/didit.php [L,QSA]
+RewriteRule ^api/kyc/create-session/?$ api/kyc/create-session.php [L,QSA]
+RewriteRule ^api/kyc/status/?$ api/kyc/status.php [L,QSA]
+
 # Browser hardening headers.
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"

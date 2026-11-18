@@ -16,6 +16,7 @@ header('Access-Control-Allow-Headers: Authorization, Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 require_once __DIR__ . '/kora-config.php';
 require_once __DIR__ . '/../app/Services/MembershipService.php';
+require_once __DIR__ . '/../app/Services/KycAccessService.php';
 
 // ── Verify user ───────────────────────────────────────────────────
 $user = get_user_from_token();
@@ -161,6 +162,10 @@ if (empty($payments) && function_exists('getMarketPDO')) {
     } catch (\Throwable $e) {}
 }
 
+$kycAccess = new \App\Services\KycAccessService();
+$kycStatus = $kycAccess->getKycStatus($user_id, $user_email);
+$kycApproved = $kycAccess->isKycApproved($user_id, $user_email);
+
 echo json_encode(array_merge([
     'subscriptions' => $activeSubs,
     'payments'      => $payments ?? [],
@@ -171,7 +176,9 @@ echo json_encode(array_merge([
     'subscription_status' => $subscription_status,
     'subscription_plan'   => $subscription_plan,
     'subscription_expiry' => $subscription_expiry,
-    'days_remaining'      => $days_remaining
+    'days_remaining'      => $days_remaining,
+    'kyc_status'          => $kycStatus,
+    'kyc_verified'        => $kycApproved
 ], $trialStatus));
 exit;
 

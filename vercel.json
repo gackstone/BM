@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "routes": [
+    {
+      "src": "^/api/webhooks/didit/?$",
+      "dest": "/api/webhooks/didit.php"
+    },
+    {
+      "src": "^/api/kyc/create-session/?$",
+      "dest": "/api/kyc/create-session.php"
+    },
+    {
+      "src": "^/api/kyc/status/?$",
+      "dest": "/api/kyc/status.php"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
+}

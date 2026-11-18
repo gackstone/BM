@@ -63,6 +63,10 @@ $adminUser = $_SESSION['admin_user'] ?? 'Admin';
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
       <span class="sidebar-link-text">Copy Traders</span>
     </a>
+    <a href="#kyc-verifications" class="sidebar-link" data-section="kyc-verifications" data-tooltip="KYC Verifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+      <span class="sidebar-link-text">KYC Verifications</span>
+    </a>
     <div class="sidebar-label">Content</div>
     <a href="#market-overview" class="sidebar-link" data-section="market-overview" data-tooltip="Market Overview">
       <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm4-8h12V5H7v4zm0 6h12v-4H7v4zm0 6h12v-4H7v4z"/></svg>
@@ -310,6 +314,9 @@ $adminUser = $_SESSION['admin_user'] ?? 'Admin';
 
   <!-- Copy Traders Section -->
   <?php include __DIR__ . '/views/copy_traders.php'; ?>
+
+  <!-- KYC Verifications Section -->
+  <?php include __DIR__ . '/views/kyc_verifications.php'; ?>
 
   <!-- Market Overview Section -->
   <section class="section" id="sectionMarketOverview" style="display:none">
@@ -1670,6 +1677,7 @@ $adminUser = $_SESSION['admin_user'] ?? 'Admin';
 <script src="js/admin-email.js?v=<?= filemtime('js/admin-email.js') ?>"></script>
 <script src="js/admin-contacts.js?v=<?= filemtime('js/admin-contacts.js') ?>"></script>
 <script src="js/admin-ai.js?v=<?= filemtime('js/admin-ai.js') ?>"></script>
+<script src="js/admin-kyc.js?v=<?= filemtime('js/admin-kyc.js') ?>"></script>
 <script src="../js/motion.js" defer></script>
 </body>
 </html>

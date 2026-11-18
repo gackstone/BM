@@ -83,6 +83,18 @@ if (!$user) {
 $user_id    = $user['id'];
 $user_email = $user['email'] ?? 'trader@bmforexhub.exchange';
 
+// ── KYC Compliance Check ──────────────────────────────────────────
+require_once __DIR__ . '/../app/Services/KycAccessService.php';
+$kycAccessService = new \App\Services\KycAccessService();
+$kycCheck = $kycAccessService->checkAccess($user_id, 'deposit', $user_email);
+if (!$kycCheck['allowed'] && in_array(strtolower($kycCheck['status']), ['declined', 'failed'])) {
+    send_json([
+        'error'        => 'Your KYC verification was declined. Please resolve your identity verification before making deposits.',
+        'kyc_required' => true,
+        'kyc_status'   => $kycCheck['status']
+    ], 403);
+}
+
 // ── Server-Side Gate: Elite Circle Terms & Electronic Enrollment ───
 if (strpos($plan, 'elite_') === 0) {
     $hasAcceptedTerms = false;

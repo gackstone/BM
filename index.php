@@ -398,6 +398,12 @@
             <span id="dashMembershipBadgeText">&#9888;&#65039; Subscription Required</span>
           </a>
 
+          <!-- KYC Identity Status Chip -->
+          <a href="kyc.php" id="dashKycBadge" class="dash-status-chip" style="background: rgba(22, 119, 255, 0.1); border: 1px solid rgba(22, 119, 255, 0.3); border-radius: 8px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #1677FF; font-weight: 600; text-decoration: none; cursor: pointer; transition: all 0.15s ease;" title="Identity Verification (KYC)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span id="dashKycBadgeText">KYC: Checking...</span>
+          </a>
+
           <!-- Plan Chip -->
           <div class="dash-status-chip" style="background: rgba(30, 45, 66, 0.4); border: 1px solid #1e2d42; border-radius: 8px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #8fa3b8;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
@@ -2868,6 +2874,49 @@ function closeSubscriptionQuickModal() {
       if (modalStatusEl) { modalStatusEl.textContent = 'No Active Subscription'; modalStatusEl.style.color = '#f6465d'; }
       if (modalPlanEl) modalPlanEl.textContent = 'None Selected';
       if (modalExpiryEl) { modalExpiryEl.textContent = 'Expired'; modalExpiryEl.style.color = '#f6465d'; }
+    }
+
+    // Update KYC Status Chip
+    try {
+      const kycBadgeEl = document.getElementById('dashKycBadge');
+      const kycTextEl = document.getElementById('dashKycBadgeText');
+      if (kycBadgeEl && kycTextEl && session && session.access_token) {
+        const kycResp = await fetch('api/kyc/status.php', {
+          headers: { 'Authorization': 'Bearer ' + session.access_token }
+        });
+        if (kycResp.ok) {
+          const kycData = await kycResp.json();
+          const kStatus = (kycData.kyc_status || 'Not Started').toLowerCase();
+          if (kStatus === 'approved') {
+            kycBadgeEl.style.background = 'rgba(34, 197, 94, 0.1)';
+            kycBadgeEl.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+            kycBadgeEl.style.color = '#22C55E';
+            kycTextEl.innerHTML = '&#10003; KYC: Verified';
+          } else if (kStatus === 'in review' || kStatus === 'pending') {
+            kycBadgeEl.style.background = 'rgba(240, 180, 41, 0.1)';
+            kycBadgeEl.style.borderColor = 'rgba(240, 180, 41, 0.3)';
+            kycBadgeEl.style.color = '#F0B429';
+            kycTextEl.innerHTML = '&#9203; KYC: In Review';
+          } else if (kStatus === 'in progress') {
+            kycBadgeEl.style.background = 'rgba(22, 119, 255, 0.1)';
+            kycBadgeEl.style.borderColor = 'rgba(22, 119, 255, 0.3)';
+            kycBadgeEl.style.color = '#1677FF';
+            kycTextEl.innerHTML = '&#9881; KYC: In Progress';
+          } else if (kStatus === 'declined' || kStatus === 'failed') {
+            kycBadgeEl.style.background = 'rgba(239, 68, 68, 0.1)';
+            kycBadgeEl.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            kycBadgeEl.style.color = '#EF4444';
+            kycTextEl.innerHTML = '&#10007; KYC: Declined';
+          } else {
+            kycBadgeEl.style.background = 'rgba(143, 163, 184, 0.1)';
+            kycBadgeEl.style.borderColor = 'rgba(143, 163, 184, 0.3)';
+            kycBadgeEl.style.color = '#8fa3b8';
+            kycTextEl.innerHTML = '&#9888; KYC: Required';
+          }
+        }
+      }
+    } catch(kErr) {
+      console.warn('KYC chip init error:', kErr);
     }
   } catch (err) {
     console.warn('Status chips init error:', err);

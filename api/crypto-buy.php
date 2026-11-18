@@ -22,15 +22,30 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); echo json_
 
 require_once __DIR__ . '/crypto-config.php';
 require_once __DIR__ . '/../app/Services/KotaniCryptoCapabilityService.php';
+require_once __DIR__ . '/../app/Services/KycAccessService.php';
 
 use App\Services\CryptoQuoteService;
 use App\Services\KoraPaymentService;
 use App\Services\KotaniCryptoCapabilityService;
+use App\Services\KycAccessService;
 
 $user = crypto_get_user_from_token();
 if (!$user) {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized — please log in']);
+    exit;
+}
+
+// ── KYC Compliance Check for Crypto Operations ────────────────────
+$kycAccess = new KycAccessService();
+$kycCheck = $kycAccess->checkAccess($user['id'], 'crypto_purchase', $user['email'] ?? null);
+if (!$kycCheck['allowed']) {
+    http_response_code(403);
+    echo json_encode([
+        'error'        => $kycCheck['reason'],
+        'kyc_required' => true,
+        'kyc_status'   => $kycCheck['status']
+    ]);
     exit;
 }
 

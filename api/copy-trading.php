@@ -16,6 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/../admin/config.php';
 require_once __DIR__ . '/../app/Services/CopyTradingService.php';
 require_once __DIR__ . '/../app/Services/MailService.php';
+require_once __DIR__ . '/../app/Services/KycAccessService.php';
 
 use App\Services\CopyTradingService;
 
@@ -79,6 +80,20 @@ if ($method === 'POST') {
     if (!$hasSub) {
         http_response_code(403);
         echo json_encode(['ok' => false, 'error' => 'An active Copy Trading subscription is required to submit MT5 credentials.']);
+        exit;
+    }
+
+    // 1b. Validate KYC Verification Compliance
+    $kycAccess = new \App\Services\KycAccessService();
+    $kycCheck = $kycAccess->checkAccess($userId, 'trading_account_activation', $userEmail);
+    if (!$kycCheck['allowed']) {
+        http_response_code(403);
+        echo json_encode([
+            'ok'           => false,
+            'error'        => $kycCheck['reason'],
+            'kyc_required' => true,
+            'kyc_status'   => $kycCheck['status']
+        ]);
         exit;
     }
 
