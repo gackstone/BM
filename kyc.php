@@ -239,7 +239,6 @@ require_once __DIR__ . '/engine_config.php';
           </div>
           <div>
             <h1 class="kyc-title">Identity Verification (KYC)</h1>
-            <div class="kyc-subtitle">Powered by Didit official identity verification gateway</div>
           </div>
         </div>
         <div id="kycStatusBadgeContainer">
