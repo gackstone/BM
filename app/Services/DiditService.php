@@ -17,10 +17,10 @@ class DiditService
     private string $baseUrl;
     private PDO $pdo;
 
-    public function __construct(?PDO $pdo = null)
+    public function __construct(?PDO $pdo = null, ?string $apiKey = null, ?string $workflowId = null)
     {
-        $this->apiKey = defined('DIDIT_API_KEY') ? DIDIT_API_KEY : (getenv('DIDIT_API_KEY') ?: '');
-        $this->workflowId = defined('DIDIT_WORKFLOW_ID') ? DIDIT_WORKFLOW_ID : (getenv('DIDIT_WORKFLOW_ID') ?: '');
+        $this->apiKey = $apiKey ?? (defined('DIDIT_API_KEY') ? DIDIT_API_KEY : (getenv('DIDIT_API_KEY') ?: ''));
+        $this->workflowId = $workflowId ?? (defined('DIDIT_WORKFLOW_ID') ? DIDIT_WORKFLOW_ID : (getenv('DIDIT_WORKFLOW_ID') ?: ''));
         $this->webhookSecret = defined('DIDIT_WEBHOOK_SECRET') ? DIDIT_WEBHOOK_SECRET : (getenv('DIDIT_WEBHOOK_SECRET') ?: $this->apiKey);
         $this->webhookUrl = defined('DIDIT_WEBHOOK_URL') ? DIDIT_WEBHOOK_URL : (getenv('DIDIT_WEBHOOK_URL') ?: 'https://bmforexhub.exchange/api/webhooks/didit');
         $this->baseUrl = defined('DIDIT_BASE_URL') ? DIDIT_BASE_URL : (getenv('DIDIT_BASE_URL') ?: 'https://verification.didit.me');
@@ -45,19 +45,26 @@ class DiditService
      */
     public function createSession(string $userId, array $options = []): array
     {
+        $correlationId = 'req_' . bin2hex(random_bytes(8));
+        $startTime = microtime(true);
+
         if (empty($userId)) {
             return [
-                'success' => false,
-                'error' => 'User ID is required to create a verification session.',
-                'code' => 400
+                'success'        => false,
+                'error'          => 'User ID is required to create a verification session.',
+                'error_type'     => 'VALIDATION_ERROR',
+                'correlation_id' => $correlationId,
+                'code'           => 400
             ];
         }
 
         if (empty($this->apiKey) || empty($this->workflowId)) {
             return [
-                'success' => false,
-                'error' => 'Didit configuration missing: API key or Workflow ID is not set.',
-                'code' => 500
+                'success'        => false,
+                'error'          => 'Didit configuration missing: API key or Workflow ID is not set.',
+                'error_type'     => 'CONFIG_ERROR',
+                'correlation_id' => $correlationId,
+                'code'           => 500
             ];
         }
 
@@ -96,13 +103,27 @@ class DiditService
         $curlError = curl_error($ch);
         curl_close($ch);
 
+        $durationMs = round((microtime(true) - $startTime) * 1000);
+
         if ($responseBody === false || !empty($curlError)) {
-            $this->logError("Network error while connecting to Didit API: " . $curlError);
+            $this->logDiagnostic([
+                'timestamp'      => date('c'),
+                'correlation_id' => $correlationId,
+                'user_id'        => $userId,
+                'endpoint'       => $endpoint,
+                'http_status'    => 0,
+                'duration_ms'    => $durationMs,
+                'error_type'     => 'NETWORK_TIMEOUT',
+                'curl_error'     => $curlError
+            ]);
+
             return [
-                'success' => false,
-                'error'   => 'Verification gateway communication error. Please try again shortly.',
-                'curl_error' => $curlError,
-                'code'    => 504
+                'success'        => false,
+                'error'          => 'Verification gateway communication error. Please try again shortly.',
+                'error_type'     => 'NETWORK_TIMEOUT',
+                'correlation_id' => $correlationId,
+                'curl_error'     => $curlError,
+                'code'           => 504
             ];
         }
 
@@ -115,6 +136,17 @@ class DiditService
             // Persist the session to kyc_verifications
             $this->recordSession($userId, $sessionId, $this->workflowId, $status, $verificationUrl, $data);
 
+            $this->logDiagnostic([
+                'timestamp'      => date('c'),
+                'correlation_id' => $correlationId,
+                'user_id'        => $userId,
+                'endpoint'       => $endpoint,
+                'http_status'    => $httpCode,
+                'duration_ms'    => $durationMs,
+                'session_id'     => $sessionId,
+                'status'         => 'SUCCESS'
+            ]);
+
             return [
                 'success'         => true,
                 'session_id'      => $sessionId,
@@ -122,33 +154,75 @@ class DiditService
                 'status'          => $status,
                 'workflow_id'     => $this->workflowId,
                 'vendor_data'     => $userId,
+                'correlation_id'  => $correlationId,
                 'data'            => $data,
                 'code'            => $httpCode
             ];
         }
 
-        // Handle specific failure codes with safe structured messages
+        // Granular error classification according to HTTP response codes
+        $errorType = 'DIDIT_UNKNOWN_ERROR';
         $errorDetail = 'Verification session initialization failed.';
-        if ($httpCode === 401) {
-            $errorDetail = 'Didit API authentication failed (invalid or unactivated API key).';
-        } elseif ($httpCode === 400) {
-            $errorDetail = 'Invalid workflow ID or request parameters.';
+        $mappedClientCode = 502; // Default upstream failure code
+
+        if ($httpCode === 400) {
+            $errorType = 'WORKFLOW_MISCONFIG';
+            $errorDetail = 'Invalid workflow configuration or request parameters.';
             if (!empty($data['detail'])) {
                 $errorDetail .= ' ' . (is_string($data['detail']) ? $data['detail'] : json_encode($data['detail']));
             }
+            $mappedClientCode = 400;
+        } elseif ($httpCode === 401) {
+            $errorType = 'DIDIT_AUTH_FAILED';
+            $errorDetail = 'Didit API authentication failed (invalid or unactivated API key).';
+            $mappedClientCode = 502;
         } elseif ($httpCode === 403) {
+            $errorType = 'DIDIT_FORBIDDEN';
             $errorDetail = 'Permission denied for Didit workflow execution.';
+            $mappedClientCode = 502;
+        } elseif ($httpCode === 404) {
+            $errorType = 'DIDIT_NOT_FOUND';
+            $errorDetail = 'Didit session route or workflow ID not found.';
+            $mappedClientCode = 502;
+        } elseif ($httpCode === 409) {
+            $errorType = 'DIDIT_CONFLICT';
+            $errorDetail = 'A conflicting verification session already exists on the gateway.';
+            $mappedClientCode = 409;
+        } elseif ($httpCode === 422) {
+            $errorType = 'DIDIT_VALIDATION_ERROR';
+            $errorDetail = 'Verification payload validation failed on Didit gateway.';
+            $mappedClientCode = 422;
+        } elseif ($httpCode === 429) {
+            $errorType = 'DIDIT_RATE_LIMIT';
+            $errorDetail = 'Verification gateway rate limit reached. Please wait a moment before trying again.';
+            $mappedClientCode = 429;
+        } elseif ($httpCode >= 500) {
+            $errorType = 'DIDIT_SERVER_ERROR';
+            $errorDetail = 'Didit identity verification gateway is currently experiencing service interruptions.';
+            $mappedClientCode = 502;
         } elseif (!empty($data['detail']) && is_string($data['detail'])) {
             $errorDetail = $data['detail'];
         }
 
-        $this->logError("Didit session creation failed [HTTP $httpCode]: $errorDetail");
+        $this->logDiagnostic([
+            'timestamp'      => date('c'),
+            'correlation_id' => $correlationId,
+            'user_id'        => $userId,
+            'endpoint'       => $endpoint,
+            'http_status'    => $httpCode,
+            'duration_ms'    => $durationMs,
+            'error_type'     => $errorType,
+            'sanitized_body' => is_array($data) ? $data : substr($responseBody, 0, 300)
+        ]);
 
         return [
-            'success' => false,
-            'error'   => $errorDetail,
-            'code'    => $httpCode,
-            'data'    => $data
+            'success'        => false,
+            'error'          => $errorDetail,
+            'error_type'     => $errorType,
+            'correlation_id' => $correlationId,
+            'upstream_code'  => $httpCode,
+            'code'           => $mappedClientCode,
+            'data'           => $data
         ];
     }
 
@@ -480,7 +554,10 @@ class DiditService
             if ($decisionRes['success'] && !empty($decisionRes['data'])) {
                 $decisionData = $decisionRes['data'];
                 if (!empty($decisionData['status'])) {
-                    $status = $decisionData['status'];
+                    $remoteStatus = $decisionData['status'];
+                    if (in_array(strtolower($remoteStatus), ['approved', 'declined', 'in review', 'expired', 'abandoned'])) {
+                        $status = $remoteStatus;
+                    }
                 }
             }
         }
@@ -679,6 +756,27 @@ class DiditService
             'new_status'      => $newStatus,
             'audit_id'        => $auditId
         ];
+    }
+
+    /**
+     * Record structured diagnostic audit log
+     */
+    public function logDiagnostic(array $context): void
+    {
+        $logDir = __DIR__ . '/../../storage/logs';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        $logFile = $logDir . '/didit_diagnostics.log';
+
+        // Redact secrets
+        $sanitized = str_replace(
+            [$this->apiKey, $this->webhookSecret],
+            ['[REDACTED_API_KEY]', '[REDACTED_SECRET]'],
+            json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+
+        @file_put_contents($logFile, date('c') . ' ' . $sanitized . "\n", FILE_APPEND | LOCK_EX);
     }
 
     /**

@@ -216,6 +216,14 @@ require_once __DIR__ . '/engine_config.php';
   border: 1px solid rgba(34, 197, 94, 0.35);
   color: #22c55e;
 }
+@keyframes kycSpin {
+  100% { transform: rotate(360deg); }
+}
+.kyc-spinner {
+  display: inline-block;
+  animation: kycSpin 0.8s linear infinite;
+  vertical-align: middle;
+}
 @media (max-width: 640px) {
   .kyc-steps { grid-template-columns: 1fr; }
   .kyc-card { padding: 22px 18px; }
@@ -324,7 +332,7 @@ require_once __DIR__ . '/engine_config.php';
   let currentKycStatus = 'Not Started';
 
   function showAlert(msg, isError) {
-    alertBox.textContent = msg;
+    alertBox.innerHTML = msg;
     alertBox.className = 'kyc-alert ' + (isError ? 'kyc-alert--error' : 'kyc-alert--success');
     alertBox.style.display = 'block';
   }
@@ -395,7 +403,10 @@ require_once __DIR__ . '/engine_config.php';
   async function handleStartVerification(forceRetry) {
     hideAlert();
     startBtn.disabled = true;
-    startBtnText.textContent = 'Initializing Didit session...';
+    startBtnText.innerHTML = '<svg class="kyc-spinner" viewBox="0 0 24 24" width="15" height="15" style="margin-right:6px;"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4"/></svg> Initializing Didit session...';
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const resp = await fetch('api/kyc/create-session.php', {
@@ -404,28 +415,45 @@ require_once __DIR__ . '/engine_config.php';
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ' + token
         },
-        body: JSON.stringify({ retry: !!forceRetry })
+        body: JSON.stringify({ retry: !!forceRetry }),
+        signal: controller.signal
       });
 
-      const data = await resp.json();
+      clearTimeout(timeoutId);
+      const data = await resp.json().catch(() => null);
       startBtn.disabled = false;
 
-      if (!resp.ok || !data.ok) {
-        startBtnText.textContent = 'Start Identity Verification';
-        showAlert(data.error || 'Failed to initialize Didit verification session. Please contact support.', true);
+      if (!resp.ok || !data || !data.ok) {
+        startBtnText.textContent = currentKycStatus.toLowerCase() === 'in progress' ? 'Continue Verification' : 'Start Identity Verification';
+
+        if (resp.status === 401 || data?.error_source === 'bm_auth') {
+          showAlert('Your login session has expired. Please <a href="login.php" style="color:#fff;text-decoration:underline;">sign in again</a> to proceed.', true);
+        } else {
+          showAlert((data && data.error) || 'Failed to initialize Didit verification session. Please try again.', true);
+        }
         return;
       }
 
-      if (data.url) {
-        startBtnText.textContent = 'Redirecting to Didit...';
-        window.location.href = data.url;
+      if (data.url && typeof data.url === 'string' && (data.url.startsWith('https://') || data.url.startsWith('http://'))) {
+        startBtnText.textContent = 'Launching Didit Verification...';
+        // Assign to verification URL
+        window.location.assign(data.url);
       } else if (data.already_verified) {
         renderStatusPill('Approved');
+        startBtn.style.display = 'none';
+      } else {
+        startBtnText.textContent = 'Start Identity Verification';
+        showAlert('Verification gateway returned an unexpected response. Please refresh and try again.', true);
       }
     } catch (err) {
+      clearTimeout(timeoutId);
       startBtn.disabled = false;
       startBtnText.textContent = 'Start Identity Verification';
-      showAlert('Network error while connecting to verification gateway. Please check your connection.', true);
+      if (err.name === 'AbortError') {
+        showAlert('Verification request timed out. Please check your network connection and click to retry.', true);
+      } else {
+        showAlert('Network error while connecting to verification gateway. Please check your connection.', true);
+      }
     }
   }
 

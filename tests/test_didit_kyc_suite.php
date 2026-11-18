@@ -47,16 +47,16 @@ $pdo->prepare("INSERT OR REPLACE INTO profiles (id, username, email, role, statu
 // ----------------------------------------------------------------------
 // Test 1: Successful session creation & database persistence
 // ----------------------------------------------------------------------
-echo "Test 1: Session creation logic & database recording...\n";
-$mockSessionId = 'test_session_' . bin2hex(random_bytes(8));
-$mockUrl = "https://verify.didit.me/session/{$mockSessionId}";
-$diditService->recordSession($testUserId, $mockSessionId, DIDIT_WORKFLOW_ID, 'In Progress', $mockUrl);
+echo "Test 1: Live Didit API session creation & database persistence...\n";
+$liveSessionResult = $diditService->createSession($testUserId);
+$mockSessionId = $liveSessionResult['session_id'] ?? ('test_session_' . bin2hex(random_bytes(8)));
+$mockUrl = $liveSessionResult['url'] ?? "https://verify.didit.me/session/{$mockSessionId}";
 
 $record = $diditService->getUserKycStatus($testUserId);
 assertCondition(
-    "1. Successful session creation record",
-    ($record !== null && $record['session_id'] === $mockSessionId && $record['verification_url'] === $mockUrl),
-    "Session ID: {$mockSessionId}, Status: {$record['status']}"
+    "1. Successful live Didit session creation & database persistence",
+    ($liveSessionResult['success'] === true && !empty($liveSessionResult['session_id']) && strpos($liveSessionResult['url'], 'https://verify.didit.me/session/') === 0 && $record !== null),
+    "Live Session ID: {$liveSessionResult['session_id']}, URL: {$liveSessionResult['url']}"
 );
 
 // ----------------------------------------------------------------------
@@ -119,12 +119,13 @@ assertCondition(
 // ----------------------------------------------------------------------
 echo "\nTest 6: Invalid API credentials handling...\n";
 // Create temporary service with bad key
-$badService = new DiditService($pdo);
-// Test calling with dummy or probe key to ensure structured error rather than crash
-$resBad = $badService->createSession($testUserId);
+$badService = new DiditService($pdo, 'sk_live_invalid_key_testing_00000000000000');
+// Test calling with fresh user to ensure structured error rather than crash
+$badUserId = 'user_bad_key_' . bin2hex(random_bytes(4));
+$resBad = $badService->createSession($badUserId);
 assertCondition(
     "6. Invalid API credentials handling",
-    (isset($resBad['success']) && isset($resBad['error'])),
+    ($resBad['success'] === false && isset($resBad['error'])),
     "System handles non-200 responses gracefully with structured error: " . ($resBad['error'] ?? '')
 );
 

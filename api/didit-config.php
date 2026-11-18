@@ -25,11 +25,11 @@ if (file_exists(__DIR__ . '/../.env')) {
 }
 
 // Didit Configuration Constants
-$didit_api_key = $_SERVER['DIDIT_API_KEY'] ?? getenv('DIDIT_API_KEY') ?: 'sk_live_HT2OZn3oS-oI-M4AiWfD27JsDBXF-fpG6WWDnsGBBu';
-$didit_workflow_id = $_SERVER['DIDIT_WORKFLOW_ID'] ?? getenv('DIDIT_WORKFLOW_ID') ?: 'cd012ec6-a97c-492b-b9f8-634bbc9bbf03';
-$didit_webhook_secret = $_SERVER['DIDIT_WEBHOOK_SECRET'] ?? getenv('DIDIT_WEBHOOK_SECRET') ?: $didit_api_key;
-$didit_webhook_url = $_SERVER['DIDIT_WEBHOOK_URL'] ?? getenv('DIDIT_WEBHOOK_URL') ?: 'https://bmforexhub.exchange/api/webhooks/didit';
-$didit_base_url = $_SERVER['DIDIT_BASE_URL'] ?? getenv('DIDIT_BASE_URL') ?: 'https://verification.didit.me';
+$didit_api_key = trim($_ENV['DIDIT_API_KEY'] ?? ($_SERVER['DIDIT_API_KEY'] ?? getenv('DIDIT_API_KEY') ?: 'sk_live_HT2OZn3oS-oI-M4AiWfD27JsDBXF-fpG6WWDnsGBBuA'));
+$didit_workflow_id = trim($_ENV['DIDIT_WORKFLOW_ID'] ?? ($_SERVER['DIDIT_WORKFLOW_ID'] ?? getenv('DIDIT_WORKFLOW_ID') ?: 'cd012ec6-a97c-492b-b9f8-634bbc9bbf03'));
+$didit_webhook_secret = trim($_ENV['DIDIT_WEBHOOK_SECRET'] ?? ($_SERVER['DIDIT_WEBHOOK_SECRET'] ?? getenv('DIDIT_WEBHOOK_SECRET') ?: $didit_api_key));
+$didit_webhook_url = trim($_ENV['DIDIT_WEBHOOK_URL'] ?? ($_SERVER['DIDIT_WEBHOOK_URL'] ?? getenv('DIDIT_WEBHOOK_URL') ?: 'https://bmforexhub.exchange/api/webhooks/didit'));
+$didit_base_url = trim($_ENV['DIDIT_BASE_URL'] ?? ($_SERVER['DIDIT_BASE_URL'] ?? getenv('DIDIT_BASE_URL') ?: 'https://verification.didit.me'));
 
 if (!defined('DIDIT_API_KEY'))        define('DIDIT_API_KEY', $didit_api_key);
 if (!defined('DIDIT_WORKFLOW_ID'))   define('DIDIT_WORKFLOW_ID', $didit_workflow_id);

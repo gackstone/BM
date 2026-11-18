@@ -38,7 +38,12 @@ use App\Services\KycAccessService;
 // 1. Authenticate user from server-validated token
 $user = get_authenticated_user();
 if (!$user || empty($user['id'])) {
-    send_kyc_json(['ok' => false, 'error' => 'Authentication required. Please sign in.'], 401);
+    send_kyc_json([
+        'ok'           => false,
+        'error'        => 'Authentication required. Please sign in to BM FOREX HUB.',
+        'error_source' => 'bm_auth',
+        'code'         => 401
+    ], 401);
 }
 
 $userId = $user['id'];
@@ -88,16 +93,21 @@ $sessionResult = $diditService->createSession($userId, [
 
 if ($sessionResult['success']) {
     send_kyc_json([
-        'ok'         => true,
-        'session_id' => $sessionResult['session_id'],
-        'url'        => $sessionResult['url'],
-        'status'     => $sessionResult['status'],
-        'reused'     => false
+        'ok'             => true,
+        'session_id'     => $sessionResult['session_id'],
+        'url'            => $sessionResult['url'],
+        'status'         => $sessionResult['status'],
+        'correlation_id' => $sessionResult['correlation_id'] ?? null,
+        'reused'         => false
     ], 200);
 } else {
+    $clientCode = $sessionResult['code'] ?? 502;
     send_kyc_json([
-        'ok'    => false,
-        'error' => $sessionResult['error'] ?? 'Failed to initialize verification session with Didit.',
-        'code'  => $sessionResult['code'] ?? 500
-    ], $sessionResult['code'] ?? 500);
+        'ok'             => false,
+        'error'          => $sessionResult['error'] ?? 'Failed to initialize verification session with Didit.',
+        'error_source'   => 'didit_upstream',
+        'error_type'     => $sessionResult['error_type'] ?? 'UNKNOWN',
+        'correlation_id' => $sessionResult['correlation_id'] ?? null,
+        'code'           => $clientCode
+    ], $clientCode);
 }
